@@ -308,9 +308,9 @@ function updateTimeDisplay() {
     // Format time as HH:MM
     timeDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     
-    // Update period display
-    let currentPeriod = determineCurrentPeriod();
-    periodDisplay.textContent = currentPeriod.name;
+    // Update period display with AM/PM instead of Korean labels
+    const isPM = (hours >= 12);
+    periodDisplay.textContent = isPM ? 'PM' : 'AM';
 }
 
 // Determine current time period (morning, noon, sunset, night)
