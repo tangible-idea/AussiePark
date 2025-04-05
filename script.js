@@ -25,8 +25,9 @@ let stars = [];
 const MAX_STARS = 100;
 let starOpacity = 0; // For fading in stars
 
-// Car and sign system
-const car = { x: 200, y: 0 }; // Car position, y will be calculated based on horizon
+// Car and parking variables
+const car = { x: 100, y: 0 }; // Car will be positioned at the left side of the screen
+let isParking = false; // Flag to track if the car is currently parking (user is clicking)
 let currentSign = null;
 let timeUntilNextSign = 0;
 let signX = 0; // Current X position of the sign
@@ -160,6 +161,16 @@ function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
+    // Add event listeners for parking (mouse and touch)
+    canvas.addEventListener('mousedown', () => { isParking = true; });
+    canvas.addEventListener('mouseup', () => { isParking = false; });
+    canvas.addEventListener('mouseleave', () => { isParking = false; });
+    
+    // Touch events for mobile devices
+    canvas.addEventListener('touchstart', () => { isParking = true; });
+    canvas.addEventListener('touchend', () => { isParking = false; });
+    canvas.addEventListener('touchcancel', () => { isParking = false; });
+    
     // Initialize clouds
     generateClouds();
     
@@ -248,20 +259,23 @@ function createCloud(x = null) {
 
 // Update all clouds positions
 function updateClouds(deltaTime) {
-    // Move each cloud
-    clouds.forEach((cloud, index) => {
-        cloud.x += cloud.speed * deltaTime;
+    // Only move clouds if not parking
+    if (!isParking) {
+        // Move each cloud
+        clouds.forEach((cloud, index) => {
+            cloud.x += cloud.speed * deltaTime;
+            
+            // If cloud is off the right edge of the screen, remove it and create a new one
+            if (cloud.x > canvas.width + 200) {
+                clouds.splice(index, 1);
+                createCloud();
+            }
+        });
         
-        // If cloud is off the right edge of the screen, remove it and create a new one
-        if (cloud.x > canvas.width + 200) {
-            clouds.splice(index, 1);
+        // If we have fewer than MAX_CLOUDS, randomly add a new one
+        if (clouds.length < MAX_CLOUDS && Math.random() < 0.01) {
             createCloud();
         }
-    });
-    
-    // If we have fewer than MAX_CLOUDS, randomly add a new one
-    if (clouds.length < MAX_CLOUDS && Math.random() < 0.01) {
-        createCloud();
     }
 }
 
@@ -277,7 +291,7 @@ function updateSigns(deltaTime) {
         } else {
             timeUntilNextSign -= deltaTime;
         }
-    } else {
+    } else if (!isParking) { // Only move signs if not parking
         // Move existing sign from right to left
         signX -= 100 * deltaTime; // Speed: 100 pixels per second
         
