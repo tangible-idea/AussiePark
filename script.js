@@ -161,10 +161,281 @@ const PERIODS = {
 // Transition buffer (minutes) for smoother day/night transitions
 const TRANSITION_BUFFER = 60; // Blend colors 60 minutes before/after period change
 
+// Scoring variables
+let score = 0;
+let scoreDisplay = null;
+let scoreIncrements = []; // Visual score increment animations
+let lastScoreTime = 0; // Used for score timing
+
+// Check if car is correctly parked in a valid parking space
+function isCorrectlyParked() {
+    console.log('주차 검사 시작 -----');
+    
+    if (!isParking || parkingSpaces.length === 0 || !currentSign) {
+        console.log('❌ 실패: 주차 중이 아니거나, 주차 공간 없음, 또는 표지판 없음');
+        return false;
+    }
+    
+    // Get the current parking space
+    const space = parkingSpaces[0];
+    console.log('주차 공간:', space.x, 'width:', space.width, '유효한 공간:', space.valid);
+    
+    // Check if space is valid according to sign rules
+    if (!space.valid) {
+        console.log('❌ 실패: 주차 불가능한 공간 (예: 주차 금지)');
+        return false;
+    }
+    
+    // Check if car is within parking space bounds
+    console.log('자동차 위치:', car.x, '주차 공간 범위:', space.x, 'to', space.x + space.width);
+    if (car.x < space.x || car.x > space.x + space.width) {
+        console.log('❌ 실패: 자동차가 주차 공간 밖에 있음');
+        return false;
+    }
+    
+    // Check if the current time and day are allowed by the sign
+    const gameHour = Math.floor(gameMinutes / 60) % 24;
+    const gameMinuteOfHour = gameMinutes % 60;
+    const gameDay = determineGameDay();
+    console.log(`현재 게임 시간: ${gameHour}:${gameMinuteOfHour}, 요일: ${gameDay}`);
+    
+    // Parse the time restriction from the sign
+    const timeRestriction = currentSign.timeRestriction;
+    
+    if (timeRestriction) {
+        const [startHour, startMinute, endHour, endMinute] = parseTimeRestriction(timeRestriction);
+        const currentMinutes = gameHour * 60 + gameMinuteOfHour;
+        const startMinutes = startHour * 60 + startMinute;
+        const endMinutes = endHour * 60 + endMinute;
+        
+        console.log(`시간 제한: ${startHour}:${startMinute} - ${endHour}:${endMinute}`);
+        
+        // Skip time check for "ALL TIMES"
+        if (timeRestriction !== "ALL TIMES") {
+            // Check if current time is outside allowed hours
+            if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
+                console.log('❌ 실패: 현재 시간이 허용된 시간대가 아님');
+                return false;
+            }
+        }
+    }
+    
+    // Parse the day restriction from the sign
+    const dayRestriction = currentSign.days;
+    
+    if (dayRestriction) {
+        // Skip day check for "ALL DAYS"
+        if (dayRestriction !== "ALL DAYS") {
+            // Check if current day is not in allowed days
+            const isDayValid = isDayAllowed(dayRestriction, gameDay);
+            console.log(`요일 제한: ${dayRestriction}, 유효함: ${isDayValid}`);
+            
+            if (!isDayValid) {
+                console.log('❌ 실패: 현재 요일이 허용되지 않음');
+                return false;
+            }
+        }
+    }
+    
+    // Check arrow direction if present
+    const arrowDirection = currentSign.arrow;
+    
+    if (arrowDirection) {
+        // Check if the car's position aligns with the arrow direction
+        console.log('화살표 방향:', arrowDirection, '표지판 X:', currentSign.x, '자동차 X:', car.x);
+        
+        if (arrowDirection === 'left' && car.x > currentSign.x) {
+            console.log('❌ 실패: 화살표가 왼쪽인데 자동차가 표지판 오른쪽에 있음');
+            return false; // Car is on the wrong side for left arrow
+        }
+        if (arrowDirection === 'right' && car.x < currentSign.x) {
+            console.log('❌ 실패: 화살표가 오른쪽인데 자동차가 표지판 왼쪽에 있음');
+            return false; // Car is on the wrong side for right arrow
+        }
+    }
+    
+    // If all checks pass, parking is correct
+    console.log('✅ 성공: 자동차가 올바르게 주차됨!');
+    return true;
+}
+
+// Helper function to parse the time restriction string
+function parseTimeRestriction(timeRestriction) {
+    // Expected format: "9AM - 5:30PM"
+    const parts = timeRestriction.split(' - ');
+    if (parts.length !== 2) {
+        return [0, 0, 23, 59]; // Default to all day if format is invalid
+    }
+    
+    const startTime = parts[0];
+    const endTime = parts[1];
+    
+    // Parse start time
+    let startHour = 0;
+    let startMinute = 0;
+    if (startTime.includes(':')) {
+        const [hourStr, minuteStr] = startTime.split(':');
+        startHour = parseInt(hourStr.replace(/[^0-9]/g, ''));
+        startMinute = parseInt(minuteStr.replace(/[^0-9]/g, ''));
+    } else {
+        startHour = parseInt(startTime.replace(/[^0-9]/g, ''));
+    }
+    
+    if (startTime.toLowerCase().includes('pm') && startHour < 12) {
+        startHour += 12;
+    }
+    
+    // Parse end time
+    let endHour = 0;
+    let endMinute = 0;
+    if (endTime.includes(':')) {
+        const [hourStr, minuteStr] = endTime.split(':');
+        endHour = parseInt(hourStr.replace(/[^0-9]/g, ''));
+        endMinute = parseInt(minuteStr.replace(/[^0-9]/g, ''));
+    } else {
+        endHour = parseInt(endTime.replace(/[^0-9]/g, ''));
+    }
+    
+    if (endTime.toLowerCase().includes('pm') && endHour < 12) {
+        endHour += 12;
+    }
+    
+    return [startHour, startMinute, endHour, endMinute];
+}
+
+// Helper function to check if the current day is allowed by the restriction
+function isDayAllowed(dayRestriction, currentDay) {
+    // Expected formats: "MON-FRI", "SAT & SUN", "MON-SAT", "SUN"
+    
+    // First, normalize the currentDay to match our format
+    const SHORT_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const currentDayShort = SHORT_DAYS[currentDay];
+    
+    // Check for single day
+    if (dayRestriction === currentDayShort) {
+        return true;
+    }
+    
+    // Check for day ranges (MON-FRI, MON-SAT)
+    if (dayRestriction.includes('-')) {
+        const [startDay, endDay] = dayRestriction.split('-');
+        const startIndex = SHORT_DAYS.indexOf(startDay);
+        const endIndex = SHORT_DAYS.indexOf(endDay);
+        const currentIndex = SHORT_DAYS.indexOf(currentDayShort);
+        
+        return currentIndex >= startIndex && currentIndex <= endIndex;
+    }
+    
+    // Check for day list (SAT & SUN)
+    if (dayRestriction.includes('&')) {
+        const days = dayRestriction.split(' & ');
+        return days.includes(currentDayShort);
+    }
+    
+    return false;
+}
+
+// Determine the current day of the week (0-6, 0 = Sunday)
+function determineGameDay() {
+    // Use gameMinutes to determine the day of the week (24 * 60 = 1440 minutes per day)
+    const daysPassed = Math.floor(gameMinutes / (24 * 60));
+    const day = daysPassed % 7; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    return day;
+}
+
+// Update the score and display
+function updateScore(deltaTime) {
+    const SCORE_INTERVAL = 0.1; // Score every 0.1 seconds
+    const POINTS_PER_INTERVAL = 1; // 1 point per interval
+    
+    // Check if correctly parked and enough time has passed since last score update
+    const correctlyParked = isCorrectlyParked();
+    console.log(`올바른 주차 여부: ${correctlyParked}, 경과 시간: ${lastScoreTime.toFixed(2)}초`);
+    
+    if (correctlyParked && (lastScoreTime >= SCORE_INTERVAL)) {
+        // Add points
+        score += POINTS_PER_INTERVAL;
+        console.log(`✅ 점수 증가! 현재 점수: ${score}`);
+        
+        // Update score display
+        if (scoreDisplay) {
+            scoreDisplay.textContent = `Score: ${score}`;
+        } else {
+            console.log('❌ 점수 표시 요소를 찾을 수 없음!'); 
+        }
+        
+        // Create a score increment animation
+        createScoreIncrement();
+        
+        // Reset the timer
+        lastScoreTime = 0;
+    } else {
+        // Increment timer
+        lastScoreTime += deltaTime;
+    }
+    
+    // Update any existing score increment animations
+    updateScoreIncrements(deltaTime);
+}
+
+// Create a floating score increment animation
+function createScoreIncrement() {
+    const increment = {
+        x: car.x,
+        y: car.y - 30, // Position above car
+        opacity: 1,
+        lifeTime: 0,
+        maxLife: 1 // 1 second lifetime
+    };
+    
+    scoreIncrements.push(increment);
+    
+    // Create a DOM element for the score increment
+    const element = document.createElement('div');
+    element.className = 'score-increment';
+    element.textContent = '+1';
+    element.style.left = `${increment.x}px`;
+    element.style.top = `${increment.y}px`;
+    document.body.appendChild(element);
+    
+    // Store a reference to the element
+    increment.element = element;
+}
+
+// Update the score increment animations
+function updateScoreIncrements(deltaTime) {
+    scoreIncrements.forEach((increment, index) => {
+        // Update lifetime
+        increment.lifeTime += deltaTime;
+        
+        // Move upward
+        increment.y -= 30 * deltaTime;
+        
+        // Update position of DOM element
+        if (increment.element) {
+            increment.element.style.top = `${increment.y}px`;
+        }
+        
+        // Remove expired increments
+        if (increment.lifeTime >= increment.maxLife) {
+            // Remove the DOM element
+            if (increment.element && increment.element.parentNode) {
+                increment.element.parentNode.removeChild(increment.element);
+            }
+            
+            // Remove from array
+            scoreIncrements.splice(index, 1);
+        }
+    });
+}
+
 // Initialize the game
 function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    
+    // Initialize score display
+    scoreDisplay = document.getElementById('score-display');
     
     // Add event listeners for parking (mouse and touch)
     canvas.addEventListener('mousedown', () => { isParking = true; });
@@ -303,23 +574,44 @@ function updateSigns(deltaTime) {
     if (!currentSign) {
         if (timeUntilNextSign <= 0) {
             // Create a new sign at the rightmost edge of the screen
-            currentSign = AUSSIE_SIGNS[Math.floor(Math.random() * AUSSIE_SIGNS.length)];
-            signX = canvas.width + 100; // Start off-screen to the right
+            const signTypes = [
+                { type: "P", valid: true, timeRestriction: "9AM - 5PM", days: "MON-FRI" },
+                { type: "P", valid: true, timeRestriction: "8AM - 8PM", days: "MON-SAT" },
+                { type: "P", valid: true, timeRestriction: "10AM - 4PM", days: "SUN" },
+                { type: "P", valid: true, timeRestriction: "6PM - 10PM", days: "FRI-SAT" },
+                { type: "P 1/2 HOUR", valid: true, timeRestriction: "9AM - 5PM", days: "MON-FRI" },
+                { type: "P 1 HOUR", valid: true, timeRestriction: "8AM - 6PM", days: "MON-SAT" },
+                { type: "P 2 HOUR", valid: true, timeRestriction: "9AM - 9PM", days: "MON-SUN" },
+                { type: "NO PARKING", valid: false, timeRestriction: "ALL TIMES", days: "ALL DAYS" },
+                { type: "NO STOPPING", valid: false, timeRestriction: "ALL TIMES", days: "ALL DAYS" }
+            ];
+            
+            const signIndex = Math.floor(Math.random() * signTypes.length);
+            const signType = { ...signTypes[signIndex] };
+            
+            // Add arrow direction for some signs (50% chance if the sign is valid)
+            if (signType.valid && Math.random() < 0.5) {
+                signType.arrow = Math.random() < 0.5 ? 'left' : 'right';
+            }
+            
+            currentSign = {
+                ...signType,
+                x: canvas.width, // Start at the right edge of the canvas
+                shadow: {
+                    width: 200, // Width of the parking space
+                    color: signType.valid ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)' // Green for valid, red for invalid
+                }
+            };
             
             // Create parking space with this sign - sized to be double the car width
             const carWidth = 100; // Car is 100px wide
             const parkingWidth = carWidth * 2; // Double the car width
             const parkingSpace = {
-                x: signX - parkingWidth/2, // Center the parking space around the sign
+                x: currentSign.x - parkingWidth/2, // Center the parking space around the sign
                 width: parkingWidth,
-                valid: true, // If the sign allows parking or not (based on sign type)
+                valid: currentSign.valid, // If the sign allows parking or not (based on sign type)
                 active: false // If the user is currently parked here
             };
-            
-            // Determine if parking is valid based on sign type
-            if (['NO PARKING', 'NO STOPPING'].includes(currentSign.type)) {
-                parkingSpace.valid = false;
-            }
             
             parkingSpaces = [parkingSpace]; // Replace old parking spaces
             timeUntilNextSign = 7; // Set timer for next sign (7 seconds)
@@ -328,22 +620,22 @@ function updateSigns(deltaTime) {
         }
     } else if (!isParking) { // Only move signs if not parking
         // Move existing sign from right to left
-        signX -= 100 * deltaTime; // Speed: 100 pixels per second
+        currentSign.x -= 100 * deltaTime; // Speed: 100 pixels per second
         
         // Update parking space position with sign
         if (parkingSpaces.length > 0) {
-            parkingSpaces[0].x = signX - parkingSpaces[0].width/2;
+            parkingSpaces[0].x = currentSign.x - parkingSpaces[0].width/2;
         }
         
         // If sign has moved off-screen to the left, remove it and its parking space
-        if (signX < -150) {
+        if (currentSign.x < -150) {
             currentSign = null;
             parkingSpaces = [];
         }
     }
 }
 
-// Update star appearance and twinkling effect
+// Update stars
 function updateStars(deltaTime) {
     const currentPeriod = determineCurrentPeriod();
     const isNight = currentPeriod === PERIODS.NIGHT;
@@ -637,6 +929,9 @@ function gameLoop(timestamp) {
     // Update smoke particles
     updateSmoke(deltaTime);
     
+    // Update score
+    updateScore(deltaTime);
+    
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -791,7 +1086,7 @@ function drawSigns() {
         // Draw pole
         const poleWidth = 10;
         const poleHeight = 200;
-        const poleX = signX;
+        const poleX = currentSign.x;
         const poleY = canvas.height * 0.7; // Align with ground level
         const signSize = 120;
         const signY = poleY - poleHeight - signSize/2;
@@ -810,51 +1105,48 @@ function drawSigns() {
             
             // Black border
             ctx.fillStyle = '#000000';
-            ctx.fillRect(signX - width/2 - 3, signY - height/2 - 3, width + 6, height + 6);
+            ctx.fillRect(currentSign.x - width/2 - 3, signY - height/2 - 3, width + 6, height + 6);
             
             // Main background
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(signX - width/2, signY - height/2, width, height);
+            ctx.fillRect(currentSign.x - width/2, signY - height/2, width, height);
             
             // Draw main text (P, 1P, 2P etc.)
             ctx.font = 'bold 48px Arial';
             ctx.fillStyle = '#006400'; // Dark green like in the reference image
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-            ctx.fillText(currentSign.type, signX, signY - height/2 + 15);
+            ctx.fillText(currentSign.type, currentSign.x, signY - height/2 + 15);
             
             // Draw time restriction
-            ctx.font = 'bold 16px Arial';
-            ctx.fillStyle = '#006400'; // Dark green
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'black';
+            ctx.font = '12px Arial';
             
-            // Split the time restriction for better formatting
-            const timeText = currentSign.timeRestriction.split(' - ');
-            if (timeText.length === 2) {
-                ctx.fillText(timeText[0], signX - 20, signY + 20);
-                ctx.fillText('-', signX, signY + 20);
-                ctx.fillText(timeText[1], signX + 20, signY + 40);
+            if (currentSign.timeRestriction && currentSign.timeRestriction.includes(' - ')) {
+                const timeText = currentSign.timeRestriction.split(' - ');
+                ctx.fillText(timeText[0], currentSign.x - 20, signY + 20);
+                ctx.fillText('-', currentSign.x, signY + 20);
+                ctx.fillText(timeText[1], currentSign.x + 20, signY + 40);
             } else {
-                ctx.fillText(currentSign.timeRestriction, signX, signY + 30);
+                ctx.fillText(currentSign.timeRestriction, currentSign.x, signY + 30);
             }
             
             // Draw days
             ctx.font = 'bold 18px Arial';
-            ctx.fillText(currentSign.days, signX, signY + 70);
+            ctx.fillText(currentSign.days, currentSign.x, signY + 70);
             
             // Draw arrow pointing left like in the reference
             ctx.beginPath();
             ctx.fillStyle = '#006400';
             const arrowY = signY + 110;
             const arrowWidth = 40;
-            ctx.moveTo(signX - arrowWidth/2, arrowY);
-            ctx.lineTo(signX + arrowWidth/2, arrowY);
-            ctx.lineTo(signX + arrowWidth/2, arrowY - 10);
-            ctx.lineTo(signX + arrowWidth/2 + 15, arrowY + 5);
-            ctx.lineTo(signX + arrowWidth/2, arrowY + 20);
-            ctx.lineTo(signX + arrowWidth/2, arrowY + 10);
-            ctx.lineTo(signX - arrowWidth/2, arrowY + 10);
+            ctx.moveTo(currentSign.x - arrowWidth/2, arrowY);
+            ctx.lineTo(currentSign.x + arrowWidth/2, arrowY);
+            ctx.lineTo(currentSign.x + arrowWidth/2, arrowY - 10);
+            ctx.lineTo(currentSign.x + arrowWidth/2 + 15, arrowY + 5);
+            ctx.lineTo(currentSign.x + arrowWidth/2, arrowY + 20);
+            ctx.lineTo(currentSign.x + arrowWidth/2, arrowY + 10);
+            ctx.lineTo(currentSign.x - arrowWidth/2, arrowY + 10);
             ctx.closePath();
             ctx.fill();
         } else if (currentSign.type === 'P METER') {
@@ -863,49 +1155,49 @@ function drawSigns() {
             
             // Black border
             ctx.fillStyle = '#000000';
-            ctx.fillRect(signX - size/2 - 3, signY - size/2 - 3, size + 6, size + 6);
+            ctx.fillRect(currentSign.x - size/2 - 3, signY - size/2 - 3, size + 6, size + 6);
             
             // White background
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(signX - size/2, signY - size/2, size, size);
+            ctx.fillRect(currentSign.x - size/2, signY - size/2, size, size);
             
             // Draw divider lines to create sections
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(signX - size/2, signY);
-            ctx.lineTo(signX + size/2, signY);
+            ctx.moveTo(currentSign.x - size/2, signY);
+            ctx.lineTo(currentSign.x + size/2, signY);
             ctx.stroke();
             
             // P METER text
             ctx.font = 'bold 24px Arial';
             ctx.fillStyle = '#006400'; // Dark green
             ctx.textAlign = 'center';
-            ctx.fillText('P', signX, signY - size/4 - 10);
+            ctx.fillText('P', currentSign.x, signY - size/4 - 10);
             ctx.font = 'bold 16px Arial';
-            ctx.fillText('METER', signX, signY - size/4 + 15);
+            ctx.fillText('METER', currentSign.x, signY - size/4 + 15);
             
             // Time restriction
             ctx.font = 'bold 14px Arial';
             const timeText = currentSign.timeRestriction.split(' - ');
             if (timeText.length === 2) {
-                ctx.fillText(timeText[0], signX - 15, signY + size/4 - 15);
-                ctx.fillText('-', signX, signY + size/4 - 15);
-                ctx.fillText(timeText[1], signX + 15, signY + size/4 - 15);
+                ctx.fillText(timeText[0], currentSign.x - 15, signY + size/4 - 15);
+                ctx.fillText('-', currentSign.x, signY + size/4 - 15);
+                ctx.fillText(timeText[1], currentSign.x + 15, signY + size/4 - 15);
             }
             
             // Days
             ctx.font = 'bold 14px Arial';
-            ctx.fillText(currentSign.days, signX, signY + size/4 + 10);
+            ctx.fillText(currentSign.days, currentSign.x, signY + size/4 + 10);
             
             // Arrow
             ctx.beginPath();
             ctx.fillStyle = '#006400';
             const arrowY = signY + size/4 - 40;
             const arrowWidth = 30;
-            ctx.moveTo(signX - arrowWidth/2, arrowY);
-            ctx.lineTo(signX - arrowWidth/2 - 15, arrowY + 5);
-            ctx.lineTo(signX - arrowWidth/2, arrowY + 10);
+            ctx.moveTo(currentSign.x - arrowWidth/2, arrowY);
+            ctx.lineTo(currentSign.x - arrowWidth/2 - 15, arrowY + 5);
+            ctx.lineTo(currentSign.x - arrowWidth/2, arrowY + 10);
             ctx.closePath();
             ctx.fill();
         } else {
@@ -915,13 +1207,13 @@ function drawSigns() {
             // Draw black border
             ctx.fillStyle = '#000000';
             ctx.beginPath();
-            ctx.arc(signX, signY, radius + 3, 0, Math.PI * 2);
+            ctx.arc(currentSign.x, signY, radius + 3, 0, Math.PI * 2);
             ctx.fill();
             
             // Draw main circle background
             ctx.fillStyle = currentSign.color;
             ctx.beginPath();
-            ctx.arc(signX, signY, radius, 0, Math.PI * 2);
+            ctx.arc(currentSign.x, signY, radius, 0, Math.PI * 2);
             ctx.fill();
             
             // Draw main text
@@ -930,15 +1222,15 @@ function drawSigns() {
                 ctx.strokeStyle = '#FFFFFF';
                 ctx.lineWidth = 8;
                 ctx.beginPath();
-                ctx.arc(signX, signY, radius * 0.7, 0, Math.PI * 2);
+                ctx.arc(currentSign.x, signY, radius * 0.7, 0, Math.PI * 2);
                 ctx.stroke();
                 
                 // Draw diagonal line
                 ctx.strokeStyle = '#000000';
                 ctx.lineWidth = 6;
                 ctx.beginPath();
-                ctx.moveTo(signX - radius * 0.5, signY - radius * 0.5);
-                ctx.lineTo(signX + radius * 0.5, signY + radius * 0.5);
+                ctx.moveTo(currentSign.x - radius * 0.5, signY - radius * 0.5);
+                ctx.lineTo(currentSign.x + radius * 0.5, signY + radius * 0.5);
                 ctx.stroke();
                 
                 // Draw text below the sign
@@ -949,25 +1241,25 @@ function drawSigns() {
                 
                 // Split the text into two lines if it's 'NO PARKING' or 'NO STOPPING'
                 const words = currentSign.type.split(' ');
-                ctx.fillText(words[0], signX, signY + radius + 10);
-                ctx.fillText(words[1], signX, signY + radius + 30);
+                ctx.fillText(words[0], currentSign.x, signY + radius + 10);
+                ctx.fillText(words[1], currentSign.x, signY + radius + 30);
                 
                 // Time and days smaller below
                 ctx.font = '12px Arial';
-                ctx.fillText(currentSign.timeRestriction, signX, signY + radius + 55);
-                ctx.fillText(currentSign.days, signX, signY + radius + 70);
+                ctx.fillText(currentSign.timeRestriction, currentSign.x, signY + radius + 55);
+                ctx.fillText(currentSign.days, currentSign.x, signY + radius + 70);
             } else {
                 // For TICKET and other signs
                 ctx.font = 'bold 20px Arial';
                 ctx.fillStyle = currentSign.textColor;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(currentSign.type, signX, signY);
+                ctx.fillText(currentSign.type, currentSign.x, signY);
                 
                 // Time and days
                 ctx.font = '14px Arial';
-                ctx.fillText(currentSign.timeRestriction, signX, signY + radius + 15);
-                ctx.fillText(currentSign.days, signX, signY + radius + 35);
+                ctx.fillText(currentSign.timeRestriction, currentSign.x, signY + radius + 15);
+                ctx.fillText(currentSign.days, currentSign.x, signY + radius + 35);
             }
         }
         
