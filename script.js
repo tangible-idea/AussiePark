@@ -169,27 +169,43 @@ let lastScoreTime = 0; // Used for score timing
 
 // Check if car is correctly parked in a valid parking space
 function isCorrectlyParked() {
-    console.log('주차 검사 시작 -----');
+    // Only log when actually trying to park
+    const shouldLog = isParking;
+    
+    if (shouldLog) {
+        console.log('주차 검사 시작 -----');
+    }
     
     if (!isParking || parkingSpaces.length === 0 || !currentSign) {
-        console.log('❌ 실패: 주차 중이 아니거나, 주차 공간 없음, 또는 표지판 없음');
+        if (shouldLog) {
+            console.log('❌ 실패: 주차 중이 아니거나, 주차 공간 없음, 또는 표지판 없음');
+        }
         return false;
     }
     
     // Get the current parking space
     const space = parkingSpaces[0];
-    console.log('주차 공간:', space.x, 'width:', space.width, '유효한 공간:', space.valid);
+    if (shouldLog) {
+        console.log('주차 공간:', space.x, 'width:', space.width, '유효한 공간:', space.valid);
+    }
     
     // Check if space is valid according to sign rules
     if (!space.valid) {
-        console.log('❌ 실패: 주차 불가능한 공간 (예: 주차 금지)');
+        if (shouldLog) {
+            console.log('❌ 실패: 주차 불가능한 공간 (예: 주차 금지)');
+        }
         return false;
     }
     
     // Check if car is within parking space bounds
-    console.log('자동차 위치:', car.x, '주차 공간 범위:', space.x, 'to', space.x + space.width);
+    if (shouldLog) {
+        console.log('자동차 위치:', car.x, '주차 공간 범위:', space.x, 'to', space.x + space.width);
+    }
+    
     if (car.x < space.x || car.x > space.x + space.width) {
-        console.log('❌ 실패: 자동차가 주차 공간 밖에 있음');
+        if (shouldLog) {
+            console.log('❌ 실패: 자동차가 주차 공간 밖에 있음');
+        }
         return false;
     }
     
@@ -197,7 +213,10 @@ function isCorrectlyParked() {
     const gameHour = Math.floor(gameMinutes / 60) % 24;
     const gameMinuteOfHour = gameMinutes % 60;
     const gameDay = determineGameDay();
-    console.log(`현재 게임 시간: ${gameHour}:${gameMinuteOfHour}, 요일: ${gameDay}`);
+    
+    if (shouldLog) {
+        console.log(`현재 게임 시간: ${gameHour}:${gameMinuteOfHour}, 요일: ${gameDay}`);
+    }
     
     // Parse the time restriction from the sign
     const timeRestriction = currentSign.timeRestriction;
@@ -208,13 +227,17 @@ function isCorrectlyParked() {
         const startMinutes = startHour * 60 + startMinute;
         const endMinutes = endHour * 60 + endMinute;
         
-        console.log(`시간 제한: ${startHour}:${startMinute} - ${endHour}:${endMinute}`);
+        if (shouldLog) {
+            console.log(`시간 제한: ${startHour}:${startMinute} - ${endHour}:${endMinute}`);
+        }
         
         // Skip time check for "ALL TIMES"
         if (timeRestriction !== "ALL TIMES") {
             // Check if current time is outside allowed hours
             if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
-                console.log('❌ 실패: 현재 시간이 허용된 시간대가 아님');
+                if (shouldLog) {
+                    console.log('❌ 실패: 현재 시간이 허용된 시간대가 아님');
+                }
                 return false;
             }
         }
@@ -228,10 +251,15 @@ function isCorrectlyParked() {
         if (dayRestriction !== "ALL DAYS") {
             // Check if current day is not in allowed days
             const isDayValid = isDayAllowed(dayRestriction, gameDay);
-            console.log(`요일 제한: ${dayRestriction}, 유효함: ${isDayValid}`);
+            
+            if (shouldLog) {
+                console.log(`요일 제한: ${dayRestriction}, 유효함: ${isDayValid}`);
+            }
             
             if (!isDayValid) {
-                console.log('❌ 실패: 현재 요일이 허용되지 않음');
+                if (shouldLog) {
+                    console.log('❌ 실패: 현재 요일이 허용되지 않음');
+                }
                 return false;
             }
         }
@@ -242,20 +270,28 @@ function isCorrectlyParked() {
     
     if (arrowDirection) {
         // Check if the car's position aligns with the arrow direction
-        console.log('화살표 방향:', arrowDirection, '표지판 X:', currentSign.x, '자동차 X:', car.x);
+        if (shouldLog) {
+            console.log('화살표 방향:', arrowDirection, '표지판 X:', currentSign.x, '자동차 X:', car.x);
+        }
         
         if (arrowDirection === 'left' && car.x > currentSign.x) {
-            console.log('❌ 실패: 화살표가 왼쪽인데 자동차가 표지판 오른쪽에 있음');
+            if (shouldLog) {
+                console.log('❌ 실패: 화살표가 왼쪽인데 자동차가 표지판 오른쪽에 있음');
+            }
             return false; // Car is on the wrong side for left arrow
         }
         if (arrowDirection === 'right' && car.x < currentSign.x) {
-            console.log('❌ 실패: 화살표가 오른쪽인데 자동차가 표지판 왼쪽에 있음');
+            if (shouldLog) {
+                console.log('❌ 실패: 화살표가 오른쪽인데 자동차가 표지판 왼쪽에 있음');
+            }
             return false; // Car is on the wrong side for right arrow
         }
     }
     
     // If all checks pass, parking is correct
-    console.log('✅ 성공: 자동차가 올바르게 주차됨!');
+    if (shouldLog) {
+        console.log('✅ 성공: 자동차가 올바르게 주차됨!');
+    }
     return true;
 }
 
@@ -350,7 +386,7 @@ function updateScore(deltaTime) {
     
     // Check if correctly parked and enough time has passed since last score update
     const correctlyParked = isCorrectlyParked();
-    console.log(`올바른 주차 여부: ${correctlyParked}, 경과 시간: ${lastScoreTime.toFixed(2)}초`);
+    //console.log(`올바른 주차 여부: ${correctlyParked}, 경과 시간: ${lastScoreTime.toFixed(2)}초`);
     
     if (correctlyParked && (lastScoreTime >= SCORE_INTERVAL)) {
         // Add points
