@@ -23,7 +23,7 @@ const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Fri
 // Stage system
 let currentStage = 1;
 const STAGES = [
-    { name: "Stage 1: Sydney", goal: 100, signSpeed: 1.1 },
+    { name: "Stage 1: Sydney", goal: 100, signSpeed: 1.2 },
     { name: "Stage 2: Melbourne", goal: 300, signSpeed: 1.45 },
     { name: "Stage 3: Brisbane", goal: 500, signSpeed: 1.75 },
     { name: "Stage 4: Adelaide", goal: 700, signSpeed: 2.0 },
@@ -1081,7 +1081,12 @@ function updateSigns(deltaTime) {
             };
             
             parkingSpaces = [parkingSpace]; // Replace old parking spaces
-            timeUntilNextSign = 3 + Math.random() * 4; // Random time between 3-7 seconds
+            
+            // Adjust timeUntilNextSign based on current stage sign speed
+            // Base time is 3-7 seconds, divided by sign speed to make it faster as stages progress
+            const baseTime = 2 + Math.random() * 3; // Random time between 3-7 seconds
+            const currentSpeed = STAGES[currentStage - 1].signSpeed;
+            timeUntilNextSign = baseTime / (currentSpeed / 1.1); // Normalize by stage 1 base speed (1.1)
         } else {
             timeUntilNextSign -= deltaTime;
         }
