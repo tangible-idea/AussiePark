@@ -427,7 +427,7 @@ function drawCelestialBody() {
         progress = minutesIntoNight / nightDuration;
     }
     
-    // Arc parameters - modified to ensure sun/moon stays above horizon
+    // Arc parameters - modified to ensure sun/moon appears higher in the sky
     const horizonY = canvas.height * 0.7; // Horizon Y position
     
     // Calculate position on semi-circle arc
@@ -441,14 +441,16 @@ function drawCelestialBody() {
     const arcRadius = canvas.width * 0.5; // Use half the canvas width as radius
     const centerX = canvas.width * 0.5; // Center X is middle of canvas
     
-    // Center Y is positioned to ensure the lowest point of the arc is still above horizon
-    const lowestPointY = horizonY - celestialRadius - 10; // 10px buffer above horizon
+    // Center Y is positioned much higher to make sun/moon rise and set higher in the sky
+    // Increased distance from horizon (was horizonY - celestialRadius - 10)
+    const lowestPointY = horizonY - celestialRadius - canvas.height * 0.25; // Significantly higher from horizon
     const centerY = lowestPointY;
     
     // Calculate position on arc
     const x = centerX - arcRadius * Math.cos(angle);
-    // For y position, use a semi-circle arc that stays above the horizon
-    const heightFactor = 0.4; // Controls the height of the arc
+    // For y position, use a semi-circle arc that stays high in the sky
+    // Increased heightFactor (was 0.4) to make the arc taller
+    const heightFactor = 0.6; // Controls the height of the arc - higher value makes taller arc
     const y = centerY - Math.sin(angle) * horizonY * heightFactor;
     
     // Draw sun or moon
