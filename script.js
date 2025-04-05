@@ -633,9 +633,6 @@ function advanceToNextStage() {
     currentStage++;
     stageCleared = false;
     
-    // Reset score for new stage
-    score = 0;
-    
     // Update display
     updateScoreDisplay();
     
@@ -713,7 +710,6 @@ function showGameCompleteMessage() {
         
         // Reset game
         currentStage = 1;
-        score = 0;
         resetGame();
         updateScoreDisplay();
     });
