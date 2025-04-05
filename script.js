@@ -16,6 +16,10 @@ const MINUTES_PER_DAY = 1440; // 24 hours * 60 minutes
 const MINUTES_PER_SECOND = 20; // Time 5x slower: 20 minutes per second (was 100)
 let gameDay = 0; // Track the current day (0 = Sunday, 1 = Monday, etc.)
 
+// Define day constants
+const SHORT_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 // Cloud system
 let clouds = [];
 const MAX_CLOUDS = 10;
@@ -216,10 +220,10 @@ function isCorrectlyParked() {
     // Check if the current time and day are allowed by the sign
     const gameHour = Math.floor(gameMinutes / 60) % 24;
     const gameMinuteOfHour = gameMinutes % 60;
-    const gameDay = determineGameDay();
+    const currentGameDay = determineGameDay(); // Use a different variable name to avoid shadowing
     
     if (shouldLog) {
-        console.log(`현재 게임 시간: ${gameHour}:${gameMinuteOfHour}, 요일: ${gameDay}`);
+        console.log(`현재 게임 시간: ${gameHour}:${gameMinuteOfHour}, 요일: ${currentGameDay} (${SHORT_DAYS[currentGameDay]})`);
     }
     
     // Parse the time restriction from the sign
@@ -254,7 +258,7 @@ function isCorrectlyParked() {
         // Skip day check for "ALL DAYS"
         if (dayRestriction !== "ALL DAYS") {
             // Check if current day is not in allowed days
-            const isDayValid = isDayAllowed(dayRestriction, gameDay);
+            const isDayValid = isDayAllowed(dayRestriction, currentGameDay);
             
             if (shouldLog) {
                 console.log(`요일 제한: ${dayRestriction}, 유효함: ${isDayValid}`);
@@ -348,7 +352,6 @@ function isDayAllowed(dayRestriction, currentDay) {
     // Expected formats: "MON-FRI", "SAT & SUN", "MON-SAT", "SUN"
     
     // First, normalize the currentDay to match our format
-    const SHORT_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     const currentDayShort = SHORT_DAYS[currentDay];
     
     let allowedDays = [];
@@ -719,7 +722,7 @@ function updateSigns(deltaTime) {
             };
             
             parkingSpaces = [parkingSpace]; // Replace old parking spaces
-            timeUntilNextSign = 7; // Set timer for next sign (7 seconds)
+            timeUntilNextSign = 3 + Math.random() * 4; // Random time between 3-7 seconds
         } else {
             timeUntilNextSign -= deltaTime;
         }
@@ -892,7 +895,6 @@ function updateTimeDisplay() {
     periodDisplay.textContent = isPM ? 'PM' : 'AM';
     
     // Update day display
-    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     dayDisplay.textContent = daysOfWeek[gameDay];
 }
 
@@ -1229,13 +1231,13 @@ function drawSigns() {
             ctx.fillStyle = '#006400'; // Green color
             ctx.font = 'bold 18px Arial';
             
-            // Format time text without displaying the hyphen
+            // Format time text with a hyphen
             const timeY = signY + 60;
             
-            // Format the time to match the image (9AM5PM)
+            // Format the time to show with a hyphen (8AM-6PM)
             let formattedTime = currentSign.timeRestriction;
             if (currentSign.timeRestriction.includes('-')) {
-                formattedTime = currentSign.timeRestriction.replace(/\s*-\s*/g, '');
+                formattedTime = currentSign.timeRestriction.replace(/\s*-\s*/g, '-');
             }
             
             // Draw time text as a single item
