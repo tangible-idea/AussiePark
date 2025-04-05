@@ -445,25 +445,33 @@ function updateScore(deltaTime) {
     // Check if correctly parked and enough time has passed since last score update
     const parkingResult = isCorrectlyParked();
     
-    // 주차 중이고 시간 제한에 걸렸을 때 벌금 부과
-    if (isParking && !parkingResult.valid && 
-        (parkingResult.reason === 'wrong_time' || parkingResult.reason === 'wrong_day') && 
-        lastPenaltyTime >= PENALTY_COOLDOWN) {
+    // Apply penalty when parked incorrectly (for all violation types)
+    if (isParking && !parkingResult.valid && lastPenaltyTime >= PENALTY_COOLDOWN) {
         
-        // 점수 차감 (최소 0)
+        // Subtract points (minimum 0)
         score = Math.max(0, score - PARKING_PENALTY);
         
-        // 벌금 메시지 추가
-        let penaltyMessage = "벌금!";
+        // Add penalty message
+        let penaltyMessage = "Incorrect Parking!"; // Default message
+        
+        // Specific messages based on violation type
         if (parkingResult.reason === 'wrong_time') {
-            penaltyMessage = `시간 제한 위반! (${parkingResult.timeRestriction})`;
+            penaltyMessage = `Time Restriction Violation! (${parkingResult.timeRestriction})`;
         } else if (parkingResult.reason === 'wrong_day') {
-            penaltyMessage = `요일 제한 위반! (${parkingResult.dayRestriction})`;
+            penaltyMessage = `Day Restriction Violation! (${parkingResult.dayRestriction})`;
+        } else if (parkingResult.reason === 'no_parking_allowed') {
+            penaltyMessage = 'No Parking Zone!';
+        } else if (parkingResult.reason === 'outside_space') {
+            penaltyMessage = 'Parked Outside Marked Bay!';
+        } else if (parkingResult.reason === 'wrong_direction') {
+            penaltyMessage = `Direction Violation! (${parkingResult.arrowDirection === 'left' ? 'Left' : 'Right'} Only)`;
+        } else if (parkingResult.reason === 'no_parking_space') {
+            penaltyMessage = 'No Parking Space!';
         }
         
-        console.log(`🚨 ${penaltyMessage} -${PARKING_PENALTY} 점수 차감!`);
+        console.log(`ud83dudea8 ${penaltyMessage} -$${PARKING_PENALTY} penalty!`);
         
-        // 벌금 애니메이션 추가
+        // Add penalty animation
         penalties.push({
             x: car.x,
             y: car.y - 50,
@@ -472,26 +480,24 @@ function updateScore(deltaTime) {
             message: penaltyMessage
         });
         
-        // 쿨다운 리셋
+        // Reset cooldown
         lastPenaltyTime = 0;
         
-        // 벌금 효과음 또는 시각적 효과 추가 가능
-        
-        // 점수 표시 업데이트
-        document.getElementById('score-display').textContent = `점수: ${score}`;
+        // Update score display
+        document.getElementById('score-display').textContent = `$${score}`;
     }
     
-    // 정상 주차 시 점수 증가
+    // Increase score for correct parking
     if (parkingResult.valid && (lastScoreTime >= SCORE_INTERVAL)) {
         // Add points
         score += POINTS_PER_INTERVAL;
-        console.log(`✅ 점수 증가! 현재 점수: ${score}`);
+        console.log(`u2705 Score increased! Current: $${score}`);
         
         // Add floating score animation
         scoreIncrements.push({
             x: car.x,
             y: car.y - 60,
-            value: "+" + POINTS_PER_INTERVAL,
+            value: "+$" + POINTS_PER_INTERVAL,
             age: 0
         });
         
@@ -499,7 +505,7 @@ function updateScore(deltaTime) {
         lastScoreTime = 0;
         
         // Update score display
-        document.getElementById('score-display').textContent = `점수: ${score}`;
+        document.getElementById('score-display').textContent = `$${score}`;
     }
     
     // Increment timers
@@ -508,6 +514,140 @@ function updateScore(deltaTime) {
     
     // Update score animations
     updateScoreAnimations(deltaTime);
+}
+
+// Helper function to parse the time restriction string
+function parseTimeRestriction(timeRestriction) {
+    // Expected format: "9AM - 5:30PM"
+    const parts = timeRestriction.split(' - ');
+    if (parts.length !== 2) {
+        return [0, 0, 23, 59]; // Default to all day if format is invalid
+    }
+    
+    const startTime = parts[0];
+    const endTime = parts[1];
+    
+    // Parse start time
+    let startHour = 0;
+    let startMinute = 0;
+    if (startTime.includes(':')) {
+        const [hourStr, minuteStr] = startTime.split(':');
+        startHour = parseInt(hourStr.replace(/[^0-9]/g, ''));
+        startMinute = parseInt(minuteStr.replace(/[^0-9]/g, ''));
+    } else {
+        startHour = parseInt(startTime.replace(/[^0-9]/g, ''));
+    }
+    
+    if (startTime.toLowerCase().includes('pm') && startHour < 12) {
+        startHour += 12;
+    }
+    
+    // Parse end time
+    let endHour = 0;
+    let endMinute = 0;
+    if (endTime.includes(':')) {
+        const [hourStr, minuteStr] = endTime.split(':');
+        endHour = parseInt(hourStr.replace(/[^0-9]/g, ''));
+        endMinute = parseInt(minuteStr.replace(/[^0-9]/g, ''));
+    } else {
+        endHour = parseInt(endTime.replace(/[^0-9]/g, ''));
+    }
+    
+    if (endTime.toLowerCase().includes('pm') && endHour < 12) {
+        endHour += 12;
+    }
+    
+    return [startHour, startMinute, endHour, endMinute];
+}
+
+// Helper function to check if the current day is allowed by the restriction
+function isDayAllowed(dayRestriction, currentDay) {
+    // Expected formats: "MON-FRI", "SAT & SUN", "MON-SAT", "SUN"
+    
+    // First, normalize the currentDay to match our format
+    const currentDayShort = SHORT_DAYS[currentDay];
+    
+    let allowedDays = [];
+    
+    // Determine all allowed days based on restriction
+    if (dayRestriction === "ALL DAYS") {
+        allowedDays = [...SHORT_DAYS]; // All days are allowed
+    } else if (dayRestriction.includes('-')) {
+        const [startDay, endDay] = dayRestriction.split('-');
+        const startIndex = SHORT_DAYS.indexOf(startDay);
+        const endIndex = SHORT_DAYS.indexOf(endDay);
+        
+        if (startIndex !== -1 && endIndex !== -1) {
+            if (startIndex <= endIndex) {
+                // Normal range (e.g., MON-FRI)
+                for (let i = startIndex; i <= endIndex; i++) {
+                    allowedDays.push(SHORT_DAYS[i]);
+                }
+            } else {
+                // Wrap-around range (e.g., FRI-MON)
+                for (let i = startIndex; i < SHORT_DAYS.length; i++) {
+                    allowedDays.push(SHORT_DAYS[i]);
+                }
+                for (let i = 0; i <= endIndex; i++) {
+                    allowedDays.push(SHORT_DAYS[i]);
+                }
+            }
+        }
+    } else if (dayRestriction.includes('&')) {
+        allowedDays = dayRestriction.split(' & ');
+    } else if (SHORT_DAYS.includes(dayRestriction)) {
+        allowedDays = [dayRestriction];
+    }
+    
+    // Log with allowed days
+    console.log(`요일 확인: 현재=${currentDayShort}, 제한=${dayRestriction}, 허용 요일=[${allowedDays.join(', ')}]`);
+    
+    // Handle "ALL DAYS" special case
+    if (dayRestriction === "ALL DAYS") {
+        return true;
+    }
+    
+    // Check for single day
+    if (dayRestriction === currentDayShort) {
+        return true;
+    }
+    
+    // Check for day range (MON-FRI)
+    if (dayRestriction.includes('-')) {
+        const [startDay, endDay] = dayRestriction.split('-');
+        const startIndex = SHORT_DAYS.indexOf(startDay);
+        const endIndex = SHORT_DAYS.indexOf(endDay);
+        const currentIndex = SHORT_DAYS.indexOf(currentDayShort);
+        
+        // Make sure the indexes are valid
+        if (startIndex === -1 || endIndex === -1) {
+            console.log(`⚠️ 유효하지 않은 요일 범위: ${startDay}-${endDay}`);
+            return false;
+        }
+        
+        // Handle wrap-around (e.g., FRI-MON means FRI, SAT, SUN, MON)
+        if (startIndex > endIndex) {
+            return currentIndex >= startIndex || currentIndex <= endIndex;
+        }
+        
+        return currentIndex >= startIndex && currentIndex <= endIndex;
+    }
+    
+    // Check for day list (SAT & SUN)
+    if (dayRestriction.includes('&')) {
+        const days = dayRestriction.split(' & ');
+        return days.includes(currentDayShort);
+    }
+    
+    console.log(`⚠️ 알 수 없는 요일 제한 형식: ${dayRestriction}`);
+    return false;
+}
+
+// Determine the current day of the week (0-6, 0 = Sunday)
+function determineGameDay() {
+    // Return the global gameDay variable that's properly tracked across days
+    // This is maintained by updateGameTime() function
+    return gameDay;
 }
 
 // Update score animations
@@ -538,7 +678,7 @@ function updateScoreAnimations(deltaTime) {
 }
 
 // Initialize the game
-function init() {
+window.onload = function() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
@@ -1458,12 +1598,9 @@ function drawPenalties() {
         ctx.textAlign = 'center';
         ctx.fillText(penalty.value, penalty.x, penalty.y);
         
-        // 벌금 메시지도 표시 (작은 폰트로)
+        // Penalty message also displayed (in smaller font)
         ctx.font = '14px Arial';
         ctx.fillText(penalty.message, penalty.x, penalty.y + 20);
     });
     ctx.restore();
 }
-
-// Start the game
-window.onload = init;
