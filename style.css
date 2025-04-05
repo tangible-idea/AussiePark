@@ -33,16 +33,17 @@ body {
 
 #time-display {
     font-weight: bold;
+    font-size: 24px; /* Increased from default */
     margin-bottom: 5px;
 }
 
 #period-display {
-    font-size: 16px;
+    font-size: 20px; /* Increased from 16px */
     margin-bottom: 5px;
 }
 
 #day-display {
-    font-size: 14px;
+    font-size: 18px; /* Increased from 14px */
     color: #ffcc00; /* Yellow color to distinguish it */
 }
 
