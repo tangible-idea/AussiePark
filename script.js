@@ -13,7 +13,8 @@ let gameMinutes = 360; // Start at 6:00 AM (6 hours * 60 minutes = 360 minutes f
 let lastTimestamp = 0; // For smooth animation
 let accumulatedTime = 0; // For time updates
 const MINUTES_PER_DAY = 1440; // 24 hours * 60 minutes
-const MINUTES_PER_SECOND = 100; // 10 in-game minutes per 0.1 seconds = 100 minutes per second
+const MINUTES_PER_SECOND = 20; // Time 5x slower: 20 minutes per second (was 100)
+let gameDay = 0; // Track the current day (0 = Monday, 1 = Tuesday, etc.)
 
 // Cloud system
 let clouds = [];
@@ -23,6 +24,93 @@ const MAX_CLOUDS = 10;
 let stars = [];
 const MAX_STARS = 100;
 let starOpacity = 0; // For fading in stars
+
+// Car and sign system
+const car = { x: 200, y: 0 }; // Car position, y will be calculated based on horizon
+let currentSign = null;
+let timeUntilNextSign = 0;
+let signX = 0; // Current X position of the sign
+
+// Australian parking signs with time and day information
+const AUSSIE_SIGNS = [
+    { 
+        type: 'P', 
+        color: '#0055B8', 
+        textColor: '#FFFFFF',
+        timeRestriction: '9AM - 5:30PM',
+        days: 'MON-FRI'
+    },
+    { 
+        type: 'P', 
+        color: '#0055B8', 
+        textColor: '#FFFFFF',
+        timeRestriction: '7AM - 8:30PM',
+        days: 'MON-SAT'
+    },
+    { 
+        type: '1P', 
+        color: '#0055B8', 
+        textColor: '#FFFFFF',
+        timeRestriction: '9AM - 5:30PM',
+        days: 'MON-FRI'
+    },
+    { 
+        type: '1P', 
+        color: '#0055B8', 
+        textColor: '#FFFFFF',
+        timeRestriction: '10AM - 4:30PM',
+        days: 'SAT & SUN'
+    },
+    { 
+        type: '2P', 
+        color: '#0055B8', 
+        textColor: '#FFFFFF',
+        timeRestriction: '9AM - 5:30PM',
+        days: 'MON-SAT'
+    },
+    { 
+        type: '1/2P', 
+        color: '#0055B8', 
+        textColor: '#FFFFFF',
+        timeRestriction: '10AM - 4:30PM',
+        days: 'MON-SAT'
+    },
+    { 
+        type: '4P', 
+        color: '#0055B8', 
+        textColor: '#FFFFFF',
+        timeRestriction: '7AM - 8:30PM',
+        days: 'SAT'
+    },
+    { 
+        type: 'P METER', 
+        color: '#0055B8', 
+        textColor: '#FFFFFF',
+        timeRestriction: '7AM - 9PM',
+        days: 'MON-SAT'
+    },
+    { 
+        type: 'NO PARKING', 
+        color: '#FF0000', 
+        textColor: '#FFFFFF',
+        timeRestriction: '6AM - 9PM',
+        days: 'MON-FRI'
+    },
+    { 
+        type: 'NO STOPPING', 
+        color: '#FF0000', 
+        textColor: '#FFFFFF',
+        timeRestriction: '7AM - 8:30PM',
+        days: 'SUN'
+    },
+    { 
+        type: 'TICKET', 
+        color: '#00AA00', 
+        textColor: '#FFFFFF',
+        timeRestriction: '9AM - 5:30PM',
+        days: 'MON-FRI'
+    }
+];
 
 // Day periods configuration
 const PERIODS = {
@@ -77,6 +165,9 @@ function init() {
     
     // Initialize stars
     generateStars();
+    
+    // Set car y position at horizon level
+    car.y = canvas.height * 0.7 - 10; // Position wheels right at the ground level
     
     requestAnimationFrame(gameLoop);
 }
@@ -171,6 +262,29 @@ function updateClouds(deltaTime) {
     // If we have fewer than MAX_CLOUDS, randomly add a new one
     if (clouds.length < MAX_CLOUDS && Math.random() < 0.01) {
         createCloud();
+    }
+}
+
+// Update sign positions with parallax scrolling
+function updateSigns(deltaTime) {
+    // Check if it's time to create a new sign
+    if (!currentSign) {
+        if (timeUntilNextSign <= 0) {
+            // Create a new sign at the rightmost edge of the screen
+            currentSign = AUSSIE_SIGNS[Math.floor(Math.random() * AUSSIE_SIGNS.length)];
+            signX = canvas.width + 100; // Start off-screen to the right
+            timeUntilNextSign = 7; // Set timer for next sign (7 seconds)
+        } else {
+            timeUntilNextSign -= deltaTime;
+        }
+    } else {
+        // Move existing sign from right to left
+        signX -= 100 * deltaTime; // Speed: 100 pixels per second
+        
+        // If sign has moved off-screen to the left, remove it
+        if (signX < -150) {
+            currentSign = null;
+        }
     }
 }
 
@@ -287,6 +401,7 @@ function updateGameTime(deltaTime) {
     // Keep time within 24 hour cycle
     if (gameMinutes >= MINUTES_PER_DAY) {
         gameMinutes -= MINUTES_PER_DAY;
+        gameDay = (gameDay + 1) % 7; // Increment day of the week
     }
     
     // Update time display - only do this when accumulated time reaches threshold
@@ -304,6 +419,7 @@ function updateTimeDisplay() {
     
     const timeDisplay = document.getElementById('time-display');
     const periodDisplay = document.getElementById('period-display');
+    const dayDisplay = document.getElementById('day-display');
     
     // Format time as HH:MM
     timeDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
@@ -311,6 +427,10 @@ function updateTimeDisplay() {
     // Update period display with AM/PM instead of Korean labels
     const isPM = (hours >= 12);
     periodDisplay.textContent = isPM ? 'PM' : 'AM';
+    
+    // Update day display
+    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    dayDisplay.textContent = daysOfWeek[gameDay];
 }
 
 // Determine current time period (morning, noon, sunset, night)
@@ -346,7 +466,7 @@ function getSkyColor() {
     
     if (currentPeriod === PERIODS.NIGHT) {
         // Special case for night which wraps around midnight
-        const totalNightMinutes = PERIODS.NIGHT.endMinute + (MINUTES_PER_DAY - PERIODS.NIGHT.startMinute);
+        const totalNightMinutes = MINUTES_PER_DAY - PERIODS.NIGHT.startMinute + PERIODS.NIGHT.endMinute;
         const minutesIntoNight = (gameMinutes >= PERIODS.NIGHT.startMinute) ? 
             gameMinutes - PERIODS.NIGHT.startMinute : 
             gameMinutes + (MINUTES_PER_DAY - PERIODS.NIGHT.startMinute);
@@ -442,6 +562,9 @@ function gameLoop(timestamp) {
     // Update clouds
     updateClouds(deltaTime);
     
+    // Update signs
+    updateSigns(deltaTime);
+    
     // Update stars
     updateStars(deltaTime);
     
@@ -474,6 +597,12 @@ function gameLoop(timestamp) {
     
     // Draw stars
     drawStars();
+    
+    // Draw signs
+    drawSigns();
+    
+    // Draw car
+    drawCar();
     
     // Request next frame
     requestAnimationFrame(gameLoop);
@@ -576,6 +705,240 @@ function drawStars() {
             ctx.fill();
         }
     });
+    ctx.restore();
+}
+
+// Draw signs
+function drawSigns() {
+    if (currentSign) {
+        ctx.save();
+        
+        // Draw pole
+        const poleWidth = 10;
+        const poleHeight = 200;
+        const poleX = signX;
+        const poleY = canvas.height * 0.7; // Align with ground level
+        const signSize = 120;
+        const signY = poleY - poleHeight - signSize/2;
+        
+        // Draw pole
+        ctx.fillStyle = '#555555';
+        ctx.fillRect(poleX - poleWidth/2, poleY - poleHeight, poleWidth, poleHeight);
+        
+        // Draw sign backing based on sign type
+        const isRectangular = ['P', '1P', '2P', '1/2P', '4P'].includes(currentSign.type);
+        
+        if (isRectangular) {
+            // Draw rectangular background for P-type signs (more like the reference)
+            const width = signSize * 0.8;
+            const height = signSize * 1.4;
+            
+            // Black border
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(signX - width/2 - 3, signY - height/2 - 3, width + 6, height + 6);
+            
+            // Main background
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(signX - width/2, signY - height/2, width, height);
+            
+            // Draw main text (P, 1P, 2P etc.)
+            ctx.font = 'bold 48px Arial';
+            ctx.fillStyle = '#006400'; // Dark green like in the reference image
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(currentSign.type, signX, signY - height/2 + 15);
+            
+            // Draw time restriction
+            ctx.font = 'bold 16px Arial';
+            ctx.fillStyle = '#006400'; // Dark green
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Split the time restriction for better formatting
+            const timeText = currentSign.timeRestriction.split(' - ');
+            if (timeText.length === 2) {
+                ctx.fillText(timeText[0], signX - 20, signY + 20);
+                ctx.fillText('-', signX, signY + 20);
+                ctx.fillText(timeText[1], signX + 20, signY + 40);
+            } else {
+                ctx.fillText(currentSign.timeRestriction, signX, signY + 30);
+            }
+            
+            // Draw days
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText(currentSign.days, signX, signY + 70);
+            
+            // Draw arrow pointing left like in the reference
+            ctx.beginPath();
+            ctx.fillStyle = '#006400';
+            const arrowY = signY + 110;
+            const arrowWidth = 40;
+            ctx.moveTo(signX - arrowWidth/2, arrowY);
+            ctx.lineTo(signX + arrowWidth/2, arrowY);
+            ctx.lineTo(signX + arrowWidth/2, arrowY - 10);
+            ctx.lineTo(signX + arrowWidth/2 + 15, arrowY + 5);
+            ctx.lineTo(signX + arrowWidth/2, arrowY + 20);
+            ctx.lineTo(signX + arrowWidth/2, arrowY + 10);
+            ctx.lineTo(signX - arrowWidth/2, arrowY + 10);
+            ctx.closePath();
+            ctx.fill();
+        } else if (currentSign.type === 'P METER') {
+            // Draw meter sign with square format like 3rd panel in reference
+            const size = signSize * 1.4;
+            
+            // Black border
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(signX - size/2 - 3, signY - size/2 - 3, size + 6, size + 6);
+            
+            // White background
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(signX - size/2, signY - size/2, size, size);
+            
+            // Draw divider lines to create sections
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(signX - size/2, signY);
+            ctx.lineTo(signX + size/2, signY);
+            ctx.stroke();
+            
+            // P METER text
+            ctx.font = 'bold 24px Arial';
+            ctx.fillStyle = '#006400'; // Dark green
+            ctx.textAlign = 'center';
+            ctx.fillText('P', signX, signY - size/4 - 10);
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText('METER', signX, signY - size/4 + 15);
+            
+            // Time restriction
+            ctx.font = 'bold 14px Arial';
+            const timeText = currentSign.timeRestriction.split(' - ');
+            if (timeText.length === 2) {
+                ctx.fillText(timeText[0], signX - 15, signY + size/4 - 15);
+                ctx.fillText('-', signX, signY + size/4 - 15);
+                ctx.fillText(timeText[1], signX + 15, signY + size/4 - 15);
+            }
+            
+            // Days
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText(currentSign.days, signX, signY + size/4 + 10);
+            
+            // Arrow
+            ctx.beginPath();
+            ctx.fillStyle = '#006400';
+            const arrowY = signY + size/4 - 40;
+            const arrowWidth = 30;
+            ctx.moveTo(signX - arrowWidth/2, arrowY);
+            ctx.lineTo(signX - arrowWidth/2 - 15, arrowY + 5);
+            ctx.lineTo(signX - arrowWidth/2, arrowY + 10);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            // Draw circular/square sign for prohibitory signs (NO PARKING, NO STOPPING)
+            const radius = signSize / 2;
+            
+            // Draw black border
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(signX, signY, radius + 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw main circle background
+            ctx.fillStyle = currentSign.color;
+            ctx.beginPath();
+            ctx.arc(signX, signY, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw main text
+            if (currentSign.type === 'NO PARKING' || currentSign.type === 'NO STOPPING') {
+                // Draw crossed circle for prohibition
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 8;
+                ctx.beginPath();
+                ctx.arc(signX, signY, radius * 0.7, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // Draw diagonal line
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(signX - radius * 0.5, signY - radius * 0.5);
+                ctx.lineTo(signX + radius * 0.5, signY + radius * 0.5);
+                ctx.stroke();
+                
+                // Draw text below the sign
+                ctx.font = 'bold 16px Arial';
+                ctx.fillStyle = '#FFFFFF';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                
+                // Split the text into two lines if it's 'NO PARKING' or 'NO STOPPING'
+                const words = currentSign.type.split(' ');
+                ctx.fillText(words[0], signX, signY + radius + 10);
+                ctx.fillText(words[1], signX, signY + radius + 30);
+                
+                // Time and days smaller below
+                ctx.font = '12px Arial';
+                ctx.fillText(currentSign.timeRestriction, signX, signY + radius + 55);
+                ctx.fillText(currentSign.days, signX, signY + radius + 70);
+            } else {
+                // For TICKET and other signs
+                ctx.font = 'bold 20px Arial';
+                ctx.fillStyle = currentSign.textColor;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(currentSign.type, signX, signY);
+                
+                // Time and days
+                ctx.font = '14px Arial';
+                ctx.fillText(currentSign.timeRestriction, signX, signY + radius + 15);
+                ctx.fillText(currentSign.days, signX, signY + radius + 35);
+            }
+        }
+        
+        ctx.restore();
+    }
+}
+
+// Draw car
+function drawCar() {
+    ctx.save();
+    
+    // Calculate car's position (fixed on left side)
+    const x = car.x;
+    const y = car.y;
+    
+    // Draw car body
+    ctx.fillStyle = '#D32F2F'; // Red color
+    ctx.fillRect(x - 50, y - 40, 100, 30); // Main body
+    ctx.fillRect(x - 30, y - 60, 60, 20); // Top part
+    
+    // Draw windows
+    ctx.fillStyle = '#90CAF9'; // Light blue
+    ctx.fillRect(x - 25, y - 58, 50, 15); // Windshield and rear window
+    
+    // Draw wheels
+    ctx.fillStyle = '#212121'; // Dark gray/black
+    ctx.beginPath();
+    ctx.arc(x - 30, y, 10, 0, Math.PI * 2); // Left wheel
+    ctx.arc(x + 30, y, 10, 0, Math.PI * 2); // Right wheel
+    ctx.fill();
+    
+    // Draw wheel rims
+    ctx.fillStyle = '#BDBDBD'; // Light gray
+    ctx.beginPath();
+    ctx.arc(x - 30, y, 4, 0, Math.PI * 2); // Left wheel rim
+    ctx.arc(x + 30, y, 4, 0, Math.PI * 2); // Right wheel rim
+    ctx.fill();
+    
+    // Draw headlights
+    ctx.fillStyle = '#FFEB3B'; // Yellow
+    ctx.fillRect(x + 45, y - 30, 5, 5); // Right headlight
+    
+    // Draw taillights
+    ctx.fillStyle = '#F44336'; // Red
+    ctx.fillRect(x - 50, y - 30, 5, 5); // Left taillight
+    
     ctx.restore();
 }
 

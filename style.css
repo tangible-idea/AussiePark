@@ -38,4 +38,10 @@ body {
 
 #period-display {
     font-size: 16px;
+    margin-bottom: 5px;
+}
+
+#day-display {
+    font-size: 14px;
+    color: #ffcc00; /* Yellow color to distinguish it */
 }
