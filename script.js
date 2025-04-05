@@ -32,6 +32,9 @@ let currentSign = null;
 let timeUntilNextSign = 0;
 let signX = 0; // Current X position of the sign
 
+// Add a parking space variable to track potential parking spaces
+let parkingSpaces = [];
+
 // Australian parking signs with time and day information
 const AUSSIE_SIGNS = [
     { 
@@ -171,6 +174,19 @@ function init() {
     canvas.addEventListener('touchend', () => { isParking = false; });
     canvas.addEventListener('touchcancel', () => { isParking = false; });
     
+    // Keyboard events - Space key for parking
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.key === ' ') {
+            isParking = true;
+        }
+    });
+    
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'Space' || e.key === ' ') {
+            isParking = false;
+        }
+    });
+    
     // Initialize clouds
     generateClouds();
     
@@ -287,6 +303,23 @@ function updateSigns(deltaTime) {
             // Create a new sign at the rightmost edge of the screen
             currentSign = AUSSIE_SIGNS[Math.floor(Math.random() * AUSSIE_SIGNS.length)];
             signX = canvas.width + 100; // Start off-screen to the right
+            
+            // Create parking space with this sign - sized to be double the car width
+            const carWidth = 100; // Car is 100px wide
+            const parkingWidth = carWidth * 2; // Double the car width
+            const parkingSpace = {
+                x: signX - parkingWidth/2, // Center the parking space around the sign
+                width: parkingWidth,
+                valid: true, // If the sign allows parking or not (based on sign type)
+                active: false // If the user is currently parked here
+            };
+            
+            // Determine if parking is valid based on sign type
+            if (['NO PARKING', 'NO STOPPING'].includes(currentSign.type)) {
+                parkingSpace.valid = false;
+            }
+            
+            parkingSpaces = [parkingSpace]; // Replace old parking spaces
             timeUntilNextSign = 7; // Set timer for next sign (7 seconds)
         } else {
             timeUntilNextSign -= deltaTime;
@@ -295,9 +328,15 @@ function updateSigns(deltaTime) {
         // Move existing sign from right to left
         signX -= 100 * deltaTime; // Speed: 100 pixels per second
         
-        // If sign has moved off-screen to the left, remove it
+        // Update parking space position with sign
+        if (parkingSpaces.length > 0) {
+            parkingSpaces[0].x = signX - parkingSpaces[0].width/2;
+        }
+        
+        // If sign has moved off-screen to the left, remove it and its parking space
         if (signX < -150) {
             currentSign = null;
+            parkingSpaces = [];
         }
     }
 }
@@ -615,6 +654,9 @@ function gameLoop(timestamp) {
     // Draw signs
     drawSigns();
     
+    // Draw parking spaces
+    drawParkingSpaces();
+    
     // Draw car
     drawCar();
     
@@ -912,6 +954,64 @@ function drawSigns() {
         
         ctx.restore();
     }
+}
+
+// Draw parking spaces near signs
+function drawParkingSpaces() {
+    // Draw each parking space
+    parkingSpaces.forEach(space => {
+        const groundY = canvas.height * 0.7;
+        const spaceHeight = 40; // Increased height to match the car height
+        
+        // Draw parking space with shadow effect
+        ctx.save();
+        
+        // Use different visual style based on whether parking is allowed
+        if (space.valid) {
+            // For valid parking: green shadow
+            const gradient = ctx.createLinearGradient(space.x, groundY - spaceHeight, space.x + space.width, groundY);
+            gradient.addColorStop(0, 'rgba(34, 139, 34, 0.1)'); // Dark green with low opacity
+            gradient.addColorStop(0.5, 'rgba(34, 139, 34, 0.4)'); // Mid opacity
+            gradient.addColorStop(1, 'rgba(34, 139, 34, 0.1)'); // Low opacity again
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(space.x, groundY - spaceHeight, space.width, spaceHeight);
+            
+            // Add white dashed lines for parking spot edges
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.moveTo(space.x, groundY - spaceHeight);
+            ctx.lineTo(space.x, groundY);
+            ctx.moveTo(space.x + space.width, groundY - spaceHeight);
+            ctx.lineTo(space.x + space.width, groundY);
+            ctx.stroke();
+        } else {
+            // For invalid parking: red shadow
+            const gradient = ctx.createLinearGradient(space.x, groundY - spaceHeight, space.x + space.width, groundY);
+            gradient.addColorStop(0, 'rgba(220, 20, 60, 0.1)'); // Dark red with low opacity
+            gradient.addColorStop(0.5, 'rgba(220, 20, 60, 0.3)'); // Mid opacity
+            gradient.addColorStop(1, 'rgba(220, 20, 60, 0.1)'); // Low opacity again
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(space.x, groundY - spaceHeight, space.width, spaceHeight);
+            
+            // Add red diagonal hash marks for no parking
+            ctx.setLineDash([]);
+            ctx.strokeStyle = 'rgba(220, 20, 60, 0.6)';
+            ctx.beginPath();
+            
+            // Draw diagonal lines
+            for (let i = 0; i < space.width; i += 15) {
+                ctx.moveTo(space.x + i, groundY - spaceHeight);
+                ctx.lineTo(space.x + i + spaceHeight, groundY);
+            }
+            
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+    });
 }
 
 // Draw car
