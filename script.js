@@ -874,7 +874,7 @@ function updateScoreAnimations(deltaTime) {
 }
 
 // Initialize the game
-window.onload = function() {
+function initializeGame() {
     // Setup canvas
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d');
@@ -926,7 +926,7 @@ window.onload = function() {
     
     // Start game loop
     requestAnimationFrame(gameLoop);
-};
+}
 
 // Initialize time elements
 function initializeTimeElements() {
@@ -1829,3 +1829,20 @@ function drawPenalties() {
     });
     ctx.restore();
 }
+
+// Initialize the game
+window.onload = function() {
+    initializeGame();
+    
+    // Prevent right-click context menu
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        return false;
+    });
+    
+    // Prevent dragging
+    document.addEventListener('dragstart', function(e) {
+        e.preventDefault();
+        return false;
+    });
+};
