@@ -1,6 +1,6 @@
 // Game canvas setup
-const canvas = document.getElementById('game-canvas');
-const ctx = canvas.getContext('2d');
+let canvas;
+let ctx;
 
 // Set canvas to full window size
 function resizeCanvas() {
@@ -19,6 +19,17 @@ let gameDay = 0; // Track the current day (0 = Sunday, 1 = Monday, etc.)
 // Define day constants
 const SHORT_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// Stage system
+let currentStage = 1;
+const STAGES = [
+    { name: "Stage 1: Sydney", goal: 100, signSpeed: 1.0 },
+    { name: "Stage 2: Melbourne", goal: 200, signSpeed: 1.5 },
+    { name: "Stage 3: Brisbane", goal: 300, signSpeed: 2.0 },
+    { name: "Stage 4: Adelaide", goal: 400, signSpeed: 2.5 },
+    { name: "Stage 5: Canberra", goal: 500, signSpeed: 3.0 }
+];
+let stageCleared = false;
 
 // Cloud system
 let clouds = [];
@@ -174,6 +185,11 @@ let lastPenaltyTime = 0; // Used for penalty timing
 const PENALTY_COOLDOWN = 1.5; // Penalty cooldown in seconds
 const PARKING_PENALTY = 10; // Penalty points for parking violation
 let penalties = []; // Penalty animations
+
+// Time display elements
+let timeDisplay = null;
+let periodDisplay = null;
+let dayDisplay = null;
 
 // Check if car is correctly parked in a valid parking space
 function isCorrectlyParked() {
@@ -469,7 +485,7 @@ function updateScore(deltaTime) {
             penaltyMessage = 'No Parking Space!';
         }
         
-        console.log(`ud83dudea8 ${penaltyMessage} -$${PARKING_PENALTY} penalty!`);
+        console.log(`🚨 ${penaltyMessage} -$${PARKING_PENALTY} penalty!`);
         
         // Add penalty animation
         penalties.push({
@@ -484,14 +500,14 @@ function updateScore(deltaTime) {
         lastPenaltyTime = 0;
         
         // Update score display
-        document.getElementById('score-display').textContent = `$${score}`;
+        updateScoreDisplay();
     }
     
     // Increase score for correct parking
     if (parkingResult.valid && (lastScoreTime >= SCORE_INTERVAL)) {
         // Add points
         score += POINTS_PER_INTERVAL;
-        console.log(`u2705 Score increased! Current: $${score}`);
+        console.log(`✅ Score increased! Current: $${score}`);
         
         // Add floating score animation
         scoreIncrements.push({
@@ -504,8 +520,11 @@ function updateScore(deltaTime) {
         // Reset timer
         lastScoreTime = 0;
         
+        // Check for stage completion
+        checkStageCompletion();
+        
         // Update score display
-        document.getElementById('score-display').textContent = `$${score}`;
+        updateScoreDisplay();
     }
     
     // Increment timers
@@ -514,6 +533,190 @@ function updateScore(deltaTime) {
     
     // Update score animations
     updateScoreAnimations(deltaTime);
+}
+
+// Helper function to update score display
+function updateScoreDisplay() {
+    // Update basic score display
+    document.getElementById('score-display').textContent = `$${score}`;
+    
+    // Update stage progress display
+    const currentGoal = STAGES[currentStage - 1].goal;
+    const stageName = STAGES[currentStage - 1].name;
+    document.getElementById('stage-display').textContent = `${stageName} - Goal: $${currentGoal}`;
+    
+    // Update progress bar if it exists
+    const progressBar = document.getElementById('stage-progress');
+    if (progressBar) {
+        const progress = Math.min(score / currentGoal, 1.0) * 100;
+        progressBar.style.width = `${progress}%`;
+    }
+}
+
+// Check if the current stage is completed
+function checkStageCompletion() {
+    if (stageCleared) return; // Don't check if we're already in stage transition
+    
+    const currentGoal = STAGES[currentStage - 1].goal;
+    
+    // Stage completed
+    if (score >= currentGoal) {
+        stageCleared = true;
+        console.log(`Stage ${currentStage} cleared! Moving to next stage.`);
+        
+        // Show stage clear message and transition to next stage
+        showStageClearMessage();
+        
+        // After delay, move to next stage
+        setTimeout(advanceToNextStage, 3000);
+    }
+}
+
+// Show stage clear message
+function showStageClearMessage() {
+    // Create stage clear message element
+    const message = document.createElement('div');
+    message.id = 'stage-clear-message';
+    message.innerHTML = `<h2>Stage ${currentStage} Cleared!</h2>
+                        <p>Moving to ${currentStage < STAGES.length ? STAGES[currentStage].name : 'Game Complete'}</p>`;
+    message.style.position = 'absolute';
+    message.style.top = '50%';
+    message.style.left = '50%';
+    message.style.transform = 'translate(-50%, -50%)';
+    message.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+    message.style.color = '#fff';
+    message.style.padding = '20px';
+    message.style.borderRadius = '10px';
+    message.style.textAlign = 'center';
+    message.style.zIndex = '1000';
+    message.style.animation = 'fadeIn 0.5s';
+    
+    // Add animation style
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Add to document
+    document.body.appendChild(message);
+    
+    // Remove after delay
+    setTimeout(() => {
+        message.style.animation = 'fadeOut 0.5s';
+        setTimeout(() => {
+            document.body.removeChild(message);
+        }, 500);
+    }, 2500);
+}
+
+// Advance to the next stage
+function advanceToNextStage() {
+    // Check if we have completed all stages
+    if (currentStage >= STAGES.length) {
+        // Game complete!
+        showGameCompleteMessage();
+        return;
+    }
+    
+    // Reset car position and remove current signs
+    resetGame();
+    
+    // Advance to next stage
+    currentStage++;
+    stageCleared = false;
+    
+    // Reset score for new stage
+    score = 0;
+    
+    // Update display
+    updateScoreDisplay();
+    
+    console.log(`Starting ${STAGES[currentStage - 1].name} with sign speed ${STAGES[currentStage - 1].signSpeed}`);
+}
+
+// Reset game state for new stage
+function resetGame() {
+    // Reset car position
+    car.x = canvas.width / 2;
+    car.y = canvas.height * 0.7 - 10; // Position wheels right at the ground level
+    car.direction = 'right';
+    
+    // Clear current sign and parking spaces
+    currentSign = null;
+    parkingSpaces = [];
+    
+    // Set time until next sign
+    timeUntilNextSign = 3;
+    
+    // Reset flags
+    isParking = false;
+}
+
+// Show game complete message
+function showGameCompleteMessage() {
+    // Create game complete message element
+    const message = document.createElement('div');
+    message.id = 'game-complete-message';
+    message.innerHTML = `<h1>Congratulations!</h1>
+                        <p>You've completed all stages of Aussie Park!</p>
+                        <p>Your final score: $${score}</p>
+                        <button id="restart-game">Play Again</button>`;
+    message.style.position = 'absolute';
+    message.style.top = '50%';
+    message.style.left = '50%';
+    message.style.transform = 'translate(-50%, -50%)';
+    message.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+    message.style.color = '#fff';
+    message.style.padding = '30px';
+    message.style.borderRadius = '10px';
+    message.style.textAlign = 'center';
+    message.style.zIndex = '1000';
+    
+    // Style restart button
+    const buttonStyle = `
+        #restart-game {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 20px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #restart-game:hover {
+            background-color: #45a049;
+        }
+    `;
+    const style = document.createElement('style');
+    style.innerHTML = buttonStyle;
+    document.head.appendChild(style);
+    
+    // Add to document
+    document.body.appendChild(message);
+    
+    // Add event listener to restart button
+    document.getElementById('restart-game').addEventListener('click', () => {
+        // Remove message
+        document.body.removeChild(message);
+        
+        // Reset game
+        currentStage = 1;
+        score = 0;
+        resetGame();
+        updateScoreDisplay();
+    });
 }
 
 // Helper function to parse the time restriction string
@@ -679,6 +882,11 @@ function updateScoreAnimations(deltaTime) {
 
 // Initialize the game
 window.onload = function() {
+    // Setup canvas
+    canvas = document.getElementById('game-canvas');
+    ctx = canvas.getContext('2d');
+    
+    // Handle resize
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
@@ -708,6 +916,9 @@ window.onload = function() {
         }
     });
     
+    // Initialize game elements
+    initializeTimeElements();
+    
     // Initialize clouds
     generateClouds();
     
@@ -717,7 +928,22 @@ window.onload = function() {
     // Set car y position at horizon level
     car.y = canvas.height * 0.7 - 10; // Position wheels right at the ground level
     
+    // Set initial score and stage display
+    updateScoreDisplay();
+    
+    // Start game loop
     requestAnimationFrame(gameLoop);
+};
+
+// Initialize time elements
+function initializeTimeElements() {
+    // Get time display elements
+    timeDisplay = document.getElementById('time-display');
+    periodDisplay = document.getElementById('period-display');
+    dayDisplay = document.getElementById('day-display');
+    
+    // Set initial game time display
+    updateTimeDisplay();
 }
 
 // Generate initial set of clouds
@@ -868,7 +1094,7 @@ function updateSigns(deltaTime) {
         }
     } else if (!isParking) { // Only move signs if not parking
         // Move existing sign from right to left
-        currentSign.x -= 100 * deltaTime; // Speed: 100 pixels per second
+        currentSign.x -= 100 * deltaTime * STAGES[currentStage - 1].signSpeed; // Speed: 100 pixels per second
         
         // Update parking space position with sign
         if (parkingSpaces.length > 0) {
@@ -1023,9 +1249,10 @@ function updateTimeDisplay() {
     const hours = Math.floor(gameMinutes / 60);
     const minutes = Math.floor(gameMinutes % 60);
     
-    const timeDisplay = document.getElementById('time-display');
-    const periodDisplay = document.getElementById('period-display');
-    const dayDisplay = document.getElementById('day-display');
+    // Get DOM elements if they're not already set
+    if (!timeDisplay) timeDisplay = document.getElementById('time-display');
+    if (!periodDisplay) periodDisplay = document.getElementById('period-display');
+    if (!dayDisplay) dayDisplay = document.getElementById('day-display');
     
     // Format time as HH:MM
     timeDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;

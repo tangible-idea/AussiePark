@@ -3,17 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Day-Night Cycle Game</title>
+    <title>Aussie Park - Parking Simulator</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
-        <div id="score-display">Score: 0</div>
+        <div id="score-display">$0</div>
+        
+        <!-- Stage display and progress bar -->
+        <div id="stage-container">
+            <div id="stage-display">Stage 1: Sydney - Goal: $100</div>
+            <div id="progress-container">
+                <div id="stage-progress"></div>
+            </div>
+        </div>
+        
         <div id="time-indicator">
             <span id="time-display">00:00</span>
-            <span id="period-display">아침</span>
-            <span id="day-display">Monday</span>
+            <span id="period-display">AM</span>
+            <span id="day-display">Sunday</span>
         </div>
     </div>
     <script src="script.js"></script>
