@@ -31,6 +31,8 @@ let isParking = false; // Flag to track if the car is currently parking (user is
 let currentSign = null;
 let timeUntilNextSign = 0;
 let signX = 0; // Current X position of the sign
+let smokeParticles = []; // Array to hold smoke particles from car exhaust
+const MAX_SMOKE_PARTICLES = 20; // Maximum number of smoke particles
 
 // Add a parking space variable to track potential parking spaces
 let parkingSpaces = [];
@@ -380,69 +382,80 @@ function updateStars(deltaTime) {
     });
 }
 
-// Draw all clouds
-function drawClouds() {
-    const currentPeriod = determineCurrentPeriod();
-    const isSunset = currentPeriod === PERIODS.SUNSET;
-    const isNight = currentPeriod === PERIODS.NIGHT;
+// Create a new smoke particle
+function createSmokeParticle() {
+    // Create different types of smoke based on whether car is moving or parked
+    if (isParking) {
+        // When parked: more gentle, blueish smoke (idling engine)
+        return {
+            x: car.x - 50, // Position at the back of the car (tailpipe)
+            y: car.y - 15, // Slightly above ground level
+            size: 3 + Math.random() * 5, // Smaller size when parked
+            opacity: 0.3 + Math.random() * 0.3, // Less opaque
+            speedX: -Math.random() * 0.5, // Slower horizontal movement
+            speedY: -Math.random() * 0.5, // Slower upward drift
+            color: `rgba(180, 180, 220, ${0.2 + Math.random() * 0.3})`, // Blueish white
+            growthRate: 0.1 + Math.random() * 0.2, // How fast it expands
+            fadeRate: 0.01 + Math.random() * 0.01 // How fast it fades
+        };
+    } else {
+        // When moving: darker, more dynamic smoke (engine working harder)
+        return {
+            x: car.x - 50, // Position at the back of the car (tailpipe)
+            y: car.y - 15, // Slightly above ground level
+            size: 5 + Math.random() * 8, // Larger size when moving
+            opacity: 0.5 + Math.random() * 0.5, // More opaque
+            speedX: -Math.random() * 2 - 1, // Faster horizontal movement
+            speedY: -Math.random() * 1 - 0.5, // Faster upward drift
+            color: `rgba(100, 100, 100, ${0.4 + Math.random() * 0.4})`, // Darker gray
+            growthRate: 0.2 + Math.random() * 0.3, // Faster expansion
+            fadeRate: 0.02 + Math.random() * 0.02 // Faster fade
+        };
+    }
+}
+
+// Update smoke particles
+function updateSmoke(deltaTime) {
+    // Generate new smoke particles at different rates depending on state
+    const emissionRate = isParking ? 0.1 : 0.3; // Fewer particles when parked
     
-    // Sort clouds by y position to create depth (clouds higher in sky render behind)
-    const sortedClouds = [...clouds].sort((a, b) => a.y - b.y);
+    if (Math.random() < emissionRate && smokeParticles.length < MAX_SMOKE_PARTICLES) {
+        smokeParticles.push(createSmokeParticle());
+    }
     
-    sortedClouds.forEach(cloud => {
-        // Determine cloud color based on time of day
-        let cloudColor;
-        if (isNight) {
-            cloudColor = `rgba(40, 50, 80, ${cloud.opacity * 0.8})`; // Darker for night
-        } else if (isSunset) {
-            cloudColor = `rgba(255, 190, 170, ${cloud.opacity})`; // Pinkish for sunset
-        } else {
-            cloudColor = `rgba(255, 255, 255, ${cloud.opacity})`; // White for day
+    // Update existing particles
+    smokeParticles.forEach((particle, index) => {
+        // Move particle
+        particle.x += particle.speedX;
+        particle.y += particle.speedY;
+        
+        // Grow particle
+        particle.size += particle.growthRate;
+        
+        // Fade particle
+        particle.opacity -= particle.fadeRate;
+        
+        // Remove faded particles
+        if (particle.opacity <= 0) {
+            smokeParticles.splice(index, 1);
         }
-        
-        // Create a cloud shape by drawing overlapping circles
-        ctx.save();
-        
-        // Draw cloud base (blend all segments together)
-        const path = new Path2D();
-        cloud.segments.forEach(segment => {
-            path.arc(
-                cloud.x + segment.offsetX, 
-                cloud.y + segment.offsetY, 
-                segment.radius, 
-                0, 
-                Math.PI * 2
-            );
-        });
-        
-        // Fill the entire cloud shape
-        ctx.fillStyle = cloudColor;
-        ctx.fill(path);
-        
-        // Add subtle highlight on top
-        const highlightPath = new Path2D();
-        cloud.segments.forEach(segment => {
-            highlightPath.arc(
-                cloud.x + segment.offsetX, 
-                cloud.y + segment.offsetY - segment.radius * 0.3, // Offset upward for highlight
-                segment.radius * 0.7, // Smaller highlight
-                0, 
-                Math.PI * 2
-            );
-        });
-        
-        // Fill with a subtle highlight
-        if (isNight) {
-            ctx.fillStyle = `rgba(60, 70, 100, ${cloud.opacity * 0.3})`;
-        } else if (isSunset) {
-            ctx.fillStyle = `rgba(255, 220, 200, ${cloud.opacity * 0.3})`;
-        } else {
-            ctx.fillStyle = `rgba(255, 255, 255, ${cloud.opacity * 0.4})`;
-        }
-        ctx.fill(highlightPath);
-        
-        ctx.restore();
     });
+}
+
+// Draw smoke particles
+function drawSmoke() {
+    ctx.save();
+    
+    // Draw each smoke particle
+    smokeParticles.forEach(particle => {
+        ctx.beginPath();
+        ctx.fillStyle = particle.color;
+        ctx.globalAlpha = particle.opacity;
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    ctx.restore();
 }
 
 // Update game time - now called from gameLoop with deltaTime
@@ -621,6 +634,9 @@ function gameLoop(timestamp) {
     // Update stars
     updateStars(deltaTime);
     
+    // Update smoke particles
+    updateSmoke(deltaTime);
+    
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -659,6 +675,9 @@ function gameLoop(timestamp) {
     
     // Draw car
     drawCar();
+    
+    // Draw smoke particles
+    drawSmoke();
     
     // Request next frame
     requestAnimationFrame(gameLoop);
@@ -1054,6 +1073,71 @@ function drawCar() {
     ctx.fillRect(x - 50, y - 30, 5, 5); // Left taillight
     
     ctx.restore();
+}
+
+// Draw all clouds
+function drawClouds() {
+    const currentPeriod = determineCurrentPeriod();
+    const isSunset = currentPeriod === PERIODS.SUNSET;
+    const isNight = currentPeriod === PERIODS.NIGHT;
+    
+    // Sort clouds by y position to create depth (clouds higher in sky render behind)
+    const sortedClouds = [...clouds].sort((a, b) => a.y - b.y);
+    
+    sortedClouds.forEach(cloud => {
+        // Determine cloud color based on time of day
+        let cloudColor;
+        if (isNight) {
+            cloudColor = `rgba(40, 50, 80, ${cloud.opacity * 0.8})`; // Darker for night
+        } else if (isSunset) {
+            cloudColor = `rgba(255, 190, 170, ${cloud.opacity})`; // Pinkish for sunset
+        } else {
+            cloudColor = `rgba(255, 255, 255, ${cloud.opacity})`; // White for day
+        }
+        
+        // Create a cloud shape by drawing overlapping circles
+        ctx.save();
+        
+        // Draw cloud base (blend all segments together)
+        const path = new Path2D();
+        cloud.segments.forEach(segment => {
+            path.arc(
+                cloud.x + segment.offsetX, 
+                cloud.y + segment.offsetY, 
+                segment.radius, 
+                0, 
+                Math.PI * 2
+            );
+        });
+        
+        // Fill the entire cloud shape
+        ctx.fillStyle = cloudColor;
+        ctx.fill(path);
+        
+        // Add subtle highlight on top
+        const highlightPath = new Path2D();
+        cloud.segments.forEach(segment => {
+            highlightPath.arc(
+                cloud.x + segment.offsetX, 
+                cloud.y + segment.offsetY - segment.radius * 0.3, // Offset upward for highlight
+                segment.radius * 0.7, // Smaller highlight
+                0, 
+                Math.PI * 2
+            );
+        });
+        
+        // Fill with a subtle highlight
+        if (isNight) {
+            ctx.fillStyle = `rgba(60, 70, 100, ${cloud.opacity * 0.3})`;
+        } else if (isSunset) {
+            ctx.fillStyle = `rgba(255, 220, 200, ${cloud.opacity * 0.3})`;
+        } else {
+            ctx.fillStyle = `rgba(255, 255, 255, ${cloud.opacity * 0.4})`;
+        }
+        ctx.fill(highlightPath);
+        
+        ctx.restore();
+    });
 }
 
 // Start the game
