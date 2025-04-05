@@ -19,6 +19,11 @@ const MINUTES_PER_SECOND = 100; // 10 in-game minutes per 0.1 seconds = 100 minu
 let clouds = [];
 const MAX_CLOUDS = 10;
 
+// Star system
+let stars = [];
+const MAX_STARS = 100;
+let starOpacity = 0; // For fading in stars
+
 // Day periods configuration
 const PERIODS = {
     MORNING: { 
@@ -70,6 +75,9 @@ function init() {
     // Initialize clouds
     generateClouds();
     
+    // Initialize stars
+    generateStars();
+    
     requestAnimationFrame(gameLoop);
 }
 
@@ -80,6 +88,28 @@ function generateClouds() {
     
     for (let i = 0; i < numClouds; i++) {
         createCloud(Math.random() * canvas.width);
+    }
+}
+
+// Generate stars for the night sky
+function generateStars() {
+    stars = [];
+    
+    for (let i = 0; i < MAX_STARS; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * (canvas.height * 0.7); // Only in the sky portion
+        const size = 0.5 + Math.random() * 1.5; // Random size between 0.5 and 2
+        const twinkleSpeed = 0.3 + Math.random() * 0.7; // Random twinkle speed
+        const twinklePhase = Math.random() * Math.PI * 2; // Random starting phase
+        
+        stars.push({
+            x,
+            y,
+            size,
+            twinkleSpeed,
+            twinklePhase,
+            visible: Math.random() > 0.3 // Some stars start invisible for better effect
+        });
     }
 }
 
@@ -142,6 +172,45 @@ function updateClouds(deltaTime) {
     if (clouds.length < MAX_CLOUDS && Math.random() < 0.01) {
         createCloud();
     }
+}
+
+// Update star appearance and twinkling effect
+function updateStars(deltaTime) {
+    const currentPeriod = determineCurrentPeriod();
+    const isNight = currentPeriod === PERIODS.NIGHT;
+    
+    // Determine if we're in early night (for fading in stars)
+    const isEarlyNight = isNight && 
+        (gameMinutes >= PERIODS.NIGHT.startMinute && 
+         gameMinutes < PERIODS.NIGHT.startMinute + 120); // First 2 hours of night
+    
+    // Gradually increase star opacity at night start
+    if (isNight) {
+        if (isEarlyNight) {
+            // Calculate how far we are into early night (0 to 1)
+            const minutesIntoNight = gameMinutes - PERIODS.NIGHT.startMinute;
+            const earlyNightProgress = Math.min(minutesIntoNight / 120, 1);
+            starOpacity = earlyNightProgress;
+        } else {
+            starOpacity = 1; // Full opacity for rest of night
+        }
+    } else {
+        starOpacity = 0; // No stars during day
+    }
+    
+    // Update stars twinkling
+    stars.forEach(star => {
+        // Only update visible stars
+        if (!star.visible && Math.random() < 0.01) {
+            star.visible = true; // Random chance to make invisible stars visible
+        }
+        
+        // Update twinkle phase
+        star.twinklePhase += star.twinkleSpeed * deltaTime;
+        if (star.twinklePhase > Math.PI * 2) {
+            star.twinklePhase -= Math.PI * 2;
+        }
+    });
 }
 
 // Draw all clouds
@@ -373,6 +442,9 @@ function gameLoop(timestamp) {
     // Update clouds
     updateClouds(deltaTime);
     
+    // Update stars
+    updateStars(deltaTime);
+    
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -399,6 +471,9 @@ function gameLoop(timestamp) {
     
     // Draw clouds
     drawClouds();
+    
+    // Draw stars
+    drawStars();
     
     // Request next frame
     requestAnimationFrame(gameLoop);
@@ -441,16 +516,15 @@ function drawCelestialBody() {
     const arcRadius = canvas.width * 0.5; // Use half the canvas width as radius
     const centerX = canvas.width * 0.5; // Center X is middle of canvas
     
-    // Center Y is positioned much higher to make sun/moon rise and set higher in the sky
-    // Increased distance from horizon (was horizonY - celestialRadius - 10)
-    const lowestPointY = horizonY - celestialRadius - canvas.height * 0.25; // Significantly higher from horizon
+    // Adjust the height to keep the sun/moon within the visible area
+    // Reduce the distance from horizon to prevent going off-screen
+    const lowestPointY = horizonY - celestialRadius - canvas.height * 0.15; // Reduced from 0.25 to 0.15
     const centerY = lowestPointY;
     
     // Calculate position on arc
     const x = centerX - arcRadius * Math.cos(angle);
-    // For y position, use a semi-circle arc that stays high in the sky
-    // Increased heightFactor (was 0.4) to make the arc taller
-    const heightFactor = 0.6; // Controls the height of the arc - higher value makes taller arc
+    // Reduce the height factor to create a flatter arc
+    const heightFactor = 0.4; // Reduced from 0.6 to 0.4
     const y = centerY - Math.sin(angle) * horizonY * heightFactor;
     
     // Draw sun or moon
@@ -480,6 +554,29 @@ function drawCelestialBody() {
         ctx.fillStyle = glowGradient;
         ctx.fill();
     }
+}
+
+// Draw stars
+function drawStars() {
+    if (starOpacity <= 0) return; // Skip if stars aren't visible at all
+    
+    ctx.save();
+    stars.forEach(star => {
+        if (star.visible) {
+            // Calculate individual star twinkle effect (0.3 to 1.0 range)
+            const twinkleFactor = 0.3 + (Math.sin(star.twinklePhase) + 1) * 0.35;
+            
+            // Apply global opacity fade-in and individual twinkle
+            const finalOpacity = starOpacity * twinkleFactor;
+            
+            // Draw the star with its unique opacity
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(255, 255, 255, ${finalOpacity})`;
+            ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+    ctx.restore();
 }
 
 // Start the game
