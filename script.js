@@ -23,10 +23,10 @@ const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Fri
 // Stage system
 let currentStage = 1;
 const STAGES = [
-    { name: "Stage 1: Sydney", goal: 100, signSpeed: 1.0 },
-    { name: "Stage 2: Melbourne", goal: 300, signSpeed: 1.25 },
-    { name: "Stage 3: Brisbane", goal: 500, signSpeed: 1.5 },
-    { name: "Stage 4: Adelaide", goal: 700, signSpeed: 1.75 },
+    { name: "Stage 1: Sydney", goal: 100, signSpeed: 1.1 },
+    { name: "Stage 2: Melbourne", goal: 300, signSpeed: 1.45 },
+    { name: "Stage 3: Brisbane", goal: 500, signSpeed: 1.75 },
+    { name: "Stage 4: Adelaide", goal: 700, signSpeed: 1. },
     { name: "Stage 5: Canberra", goal: 1000, signSpeed: 2.25 }
 ];
 let stageCleared = false;
@@ -625,9 +625,6 @@ function advanceToNextStage() {
         showGameCompleteMessage();
         return;
     }
-    
-    // Reset car position and remove current signs
-    resetGame();
     
     // Advance to next stage
     currentStage++;
